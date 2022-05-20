@@ -98,14 +98,19 @@ func AskQuestion(input *AskQuestionInput) string {
 		}
 
 		// Check if any CheckInput function validates the input. If so, return it immediately
+		fmt.Printf("Answer before calling the check input function is %s\n", answer)
 		if input.EC2Helper != nil && input.Fns != nil {
 			for _, fn := range input.Fns {
+				fmt.Println("About to call the validation function...")
 				if fn(input.EC2Helper, answer) {
+					fmt.Printf("Validation function was successful. Returning %s\n", answer)
 					return answer
 				}
+				fmt.Println("Validation was unsuccessful.")
 			}
 		}
 
+		fmt.Println("Done checking validation function. Proceeding to other checks...")
 		// If an arbitrary integer is allowed, try to parse the input as an integer
 		if input.AcceptAnyInteger {
 			_, err := strconv.Atoi(answer)
@@ -495,6 +500,7 @@ func AskImage(h *ec2helper.EC2Helper, instanceType string) (*ec2.Image, error) {
 		Fns:               []CheckInput{ec2helper.ValidateImageId},
 	})
 
+	fmt.Printf("The answer we got from AskQuestion was %s\n", answer)
 	// Find the image information
 	if defaultImages != nil {
 		for _, image := range *defaultImages {
@@ -504,6 +510,7 @@ func AskImage(h *ec2helper.EC2Helper, instanceType string) (*ec2.Image, error) {
 		}
 	}
 
+	fmt.Printf("Didn't match anything in the default images, so the answer should be %s, but I think we're going to fail out instead\n", answer)
 	return nil, errors.New(fmt.Sprintf("No image information for %s found", answer))
 }
 

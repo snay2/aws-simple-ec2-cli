@@ -1288,7 +1288,9 @@ func getSimpleEc2Tags() []*ec2.Tag {
 
 // Validate an image id. Used as a function interface to validate question input
 func ValidateImageId(h *EC2Helper, imageId string) bool {
+	fmt.Printf("About to check image ID %s...\n", imageId)
 	image, _ := h.GetImageById(imageId)
+	fmt.Printf("Got the response: %s\n", *image.ImageId)
 	return image != nil
 }
 
