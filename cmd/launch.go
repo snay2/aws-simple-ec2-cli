@@ -261,7 +261,7 @@ func launchNonInteractive(h *ec2helper.EC2Helper) {
 	confirmation := question.AskConfirmationWithInput(simpleConfig, detailedConfig, false)
 
 	// Launch the instance.
-	_, err = h.LaunchInstance(simpleConfig, detailedConfig, confirmation == cli.ResponseYes)
+	_, err = h.LaunchSpotInstance(simpleConfig, detailedConfig, confirmation == cli.ResponseYes)
 	if cli.ShowError(err, "Launching instance failed") {
 		return
 	}

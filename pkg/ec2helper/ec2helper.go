@@ -1063,6 +1063,34 @@ func getRunInstanceInput(simpleConfig *config.SimpleInfo, detailedConfig *config
 	return input
 }
 
+func getCreateFleetInput(simpleConfig *config.SimpleInfo, detailedConfig *config.DetailedInfo, launchTemplate *ec2.LaunchTemplate) *ec2.CreateFleetInput {
+	input := &ec2.CreateFleetInput{
+		Type: aws.String("instant"),
+	}
+	targetCapacity := &ec2.TargetCapacitySpecificationRequest{
+		DefaultTargetCapacityType: aws.String("spot"),
+		TotalTargetCapacity:       aws.Int64(1),
+		// SpotTargetCapacity: aws.Int64(1),
+	}
+	input.TargetCapacitySpecification = targetCapacity
+	spotOptions := &ec2.SpotOptionsRequest{
+		AllocationStrategy: aws.String("lowest-price"),
+		MinTargetCapacity:  aws.Int64(1),
+		SingleInstanceType: aws.Bool(true),
+	}
+	input.SpotOptions = spotOptions
+
+	// The caller will be responsible for creating and subsequently deleting the launch template
+	launchTemplateConfig := &ec2.FleetLaunchTemplateConfigRequest{
+		LaunchTemplateSpecification: &ec2.FleetLaunchTemplateSpecificationRequest{
+			LaunchTemplateId: launchTemplate.LaunchTemplateId,
+			Version:          aws.String("$Default"),
+		},
+	}
+	input.LaunchTemplateConfigs = append(input.LaunchTemplateConfigs, launchTemplateConfig)
+	return input
+}
+
 // Get the default string config
 func (h *EC2Helper) GetDefaultSimpleConfig() (*config.SimpleInfo, error) {
 	simpleConfig := config.NewSimpleInfo()
@@ -1160,6 +1188,62 @@ func (h *EC2Helper) LaunchInstance(simpleConfig *config.SimpleInfo, detailedConf
 		// Abort
 		return nil, errors.New("Options not confirmed")
 	}
+}
+
+func (h *EC2Helper) LaunchSpotInstance(simpleConfig *config.SimpleInfo, detailedConfig *config.DetailedInfo, confirmation bool) ([]string, error) {
+	fmt.Println("Attempting to launch a spot instance with some hardcoded options...")
+
+	// Create the launch template
+	launchTemplateInput := getLaunchTemplateInput(simpleConfig, detailedConfig)
+	createLaunchTemplateResponse, err := h.Svc.CreateLaunchTemplate(launchTemplateInput)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Println("Created launch template")
+	launchTemplate := *createLaunchTemplateResponse.LaunchTemplate
+
+	// Launch the actual instance
+	input := getCreateFleetInput(simpleConfig, detailedConfig, &launchTemplate)
+	launchedInstances := []string{}
+
+	createFleetResponse, err := h.Svc.CreateFleet(input)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Println("Launch Instance Success!")
+	for _, instance := range createFleetResponse.Instances {
+		for _, instanceID := range instance.InstanceIds {
+			fmt.Printf("Instance ID: %s\n", *instanceID)
+			launchedInstances = append(launchedInstances, *instanceID)
+		}
+	}
+
+	// Delete the launch template
+	deleteLaunchTemplateInput := getDeleteLaunchTemplateInput(&launchTemplate)
+	_, err = h.Svc.DeleteLaunchTemplate(deleteLaunchTemplateInput)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Println("Deleted the launch template")
+	return launchedInstances, nil
+}
+
+func getLaunchTemplateInput(simpleConfig *config.SimpleInfo, detailedConfig *config.DetailedInfo) *ec2.CreateLaunchTemplateInput {
+	input := &ec2.CreateLaunchTemplateInput{
+		LaunchTemplateName: aws.String(fmt.Sprintf("SimpleEC2SpotLaunchTemplate%s", "TODOMakeMeAUniqueString")),
+		LaunchTemplateData: &ec2.RequestLaunchTemplateData{
+			ImageId:      &simpleConfig.ImageId,
+			InstanceType: detailedConfig.InstanceTypeInfo.InstanceType,
+		},
+	}
+	return input
+}
+
+func getDeleteLaunchTemplateInput(launchTemplate *ec2.LaunchTemplate) *ec2.DeleteLaunchTemplateInput {
+	input := &ec2.DeleteLaunchTemplateInput{
+		LaunchTemplateId: launchTemplate.LaunchTemplateId,
+	}
+	return input
 }
 
 // Create a new stack and update simpleConfig for config saving
